@@ -15,12 +15,11 @@ def getFolderName(platform):
     else:
         raise "Unrecognized platform"
 
-
 def getZipFileName(platform):
     return getFolderName(platform) + ".zip"
-    
 
-url = "https://github.com/coinop-logan/coinfight/releases/download/v0.3.5.0/coinfight-linux.zip"
+def getDownloadUrl(platform):
+    return "https://github.com/coinop-logan/coinfight/releases/download/v0.3.5.0/" + getZipFileName(platform)
 
 class Launcher(wx.Frame):
     def __init__(self, platform):
@@ -62,7 +61,7 @@ class Launcher(wx.Frame):
             os.remove(getZipFileName(self.platform))
 
         self.writingFile = open(getZipFileName(self.platform), 'wb')
-        response = requests.get(url, stream=True, allow_redirects=True)
+        response = requests.get(getDownloadUrl(self.platform), stream=True, allow_redirects=True)
         totalLength = response.headers.get('content-length')
 
         if (totalLength is None):
@@ -108,7 +107,11 @@ class Launcher(wx.Frame):
             os.chdir(getFolderName(self.platform))
             self.statusText.SetLabel("Running")
             wx.YieldIfNeeded()
-            os.spawnv(os.P_WAIT, "coinfight", ["coinfight"])
+            if self.platform == PLATFORM_WINDOWS:
+                execName = "coinfight.exe"
+            else:
+                execName = "coinfight"
+            os.spawnv(os.P_WAIT, execName, [execName])
             self.statusText.SetLabel("All done!")
 
 
