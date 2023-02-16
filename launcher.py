@@ -93,6 +93,8 @@ class Launcher(wx.Frame):
             
             with ZipFile(getZipFileName(self.platform), 'r') as zObject:
                 zObject.extractall()
+            
+            os.remove(getZipFileName(self.platform))
 
             self.statusText.SetLabel("Unzipped")
 
