@@ -11,7 +11,7 @@ def getFolderName(platform):
     elif platform == PLATFORM_WINDOWS:
         return "coinfight-windows"
     elif platform == PLATFORM_MAC:
-        return "coinfight-mac"
+        return "coinfight-mac-x86"
     else:
         raise "Unrecognized platform"
 
@@ -97,7 +97,7 @@ class Launcher(wx.Frame):
 
             self.statusText.SetLabel("Unzipped")
 
-            if self.platform == PLATFORM_LINUX:
+            if self.platform == PLATFORM_LINUX or self.platform == PLATFORM_MAC:
                 coinfightBinaryPath = os.path.join(getFolderName(self.platform), "coinfight")            
                 st = os.stat(coinfightBinaryPath)
                 os.chmod(coinfightBinaryPath, st.st_mode | stat.S_IEXEC)
