@@ -41,26 +41,52 @@ def getDownloadUrl(platform, version):
 class Launcher(wx.Frame):
     def __init__(self, platform):
         style=wx.DEFAULT_FRAME_STYLE
-        wx.Frame.__init__(self, None, title="Coinfight Launcher", size=(600, 400), style=style)
+        wx.Frame.__init__(self, None, title="Coinfight Launcher", size=(800, 400), style=style)
 
         self.platform = platform
 
-        self.SetBackgroundColour(wx.Colour(0, 0, 0))
+        self.SetBackgroundColour(wx.Colour(0, 0, 50))
+
+        self.mainSizer = wx.BoxSizer(wx.VERTICAL)
+        self.mainSizer.AddSpacer(15)
+
+        font = wx.Font(36, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
+        title = wx.StaticText(self, label="Coinfight Launcher")
+        title.SetFont(font)
+        title.SetForegroundColour(wx.Colour(255, 255, 255))
+        self.mainSizer.Add(title, 0, wx.ALIGN_CENTER_HORIZONTAL)
+
+        self.mainSizer.AddStretchSpacer()
+
+        buttonAndStatusSizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        buttonFont = wx.Font(20, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
+        self.button = wx.Button(self, label="test", size=(200, 70))
+        self.button.SetFont(buttonFont)
+        self.button.Bind(wx.EVT_BUTTON, self.buttonClicked)
+        buttonAndStatusSizer.Add(self.button, 0, wx.ALIGN_LEFT, 20)
 
         self.statusText = wx.StaticText(self, label="")
-        font = wx.Font(20, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
+        font = wx.Font(16, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
         self.statusText.SetFont(font)
-        self.statusText.SetForegroundColour(wx.Colour(255, 255, 255))
+        self.statusText.SetForegroundColour(wx.Colour(200, 200, 200))
+        buttonAndStatusSizer.Add(self.statusText, 0, wx.ALIGN_LEFT | wx.ALIGN_BOTTOM | wx.ALL, 10)
 
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.AddStretchSpacer()
-        sizer.Add(self.statusText, 0, wx.ALIGN_LEFT)
-        sizer.AddStretchSpacer()
-        self.SetSizer(sizer)
+        self.mainSizer.Add(buttonAndStatusSizer, 0, wx.ALL, 10)
+
+        self.progressBar = wx.Gauge(self)
+        self.mainSizer.Add(self.progressBar, 0, wx.EXPAND | wx.ALL, 10)
+
+        self.mainSizer.AddSpacer(15)
+
+        self.SetSizer(self.mainSizer)
 
         self.Bind(wx.EVT_SHOW, self.OnShow)
 
         self.started = False
+
+    def buttonClicked(self, event):
+        self.progressBar.Show()
 
     def OnShow(self, event):
         # this method will be called every time the frame is shown
@@ -72,6 +98,10 @@ class Launcher(wx.Frame):
                 wx.CallAfter(self.startDownloadProcess)
     
     def startDownloadProcess(self):
+        self.progressBar.Hide()
+        self.button
+        self.statusText.SetLabel("status wow")
+        return
         self.dlResponse = None
 
         self.statusText.SetLabel("Checking latest version")
