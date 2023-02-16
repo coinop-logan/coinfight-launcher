@@ -99,9 +99,7 @@ class Launcher(wx.Frame):
     
     def startDownloadProcess(self):
         self.progressBar.Hide()
-        self.button
-        self.statusText.SetLabel("status wow")
-        return
+        
         self.dlResponse = None
 
         self.statusText.SetLabel("Checking latest version")
@@ -141,16 +139,20 @@ class Launcher(wx.Frame):
             return
 
         else:
+
             self.dlResponse = response
             self.dataGenerator = response.iter_content(chunk_size=5000)
             self.statusText.SetLabel("downloading...")
             self.totalDlLength = int(totalLength)
             self.downloadedSoFar = 0
 
+            self.progressBar.SetRange(self.totalDlLength)
+            self.progressBar.Show()
+
             for data in self.dataGenerator:
                 self.downloadedSoFar += len(data)
                 self.writingFile.write(data)
-                self.statusText.SetLabel(str(float(self.downloadedSoFar) / self.totalDlLength))
+                self.progressBar.SetValue(self.downloadedSoFar)
                 
                 if (self.downloadedSoFar == self.totalDlLength):
                     self.statusText.SetLabel("Download complete! Unzipping.")
