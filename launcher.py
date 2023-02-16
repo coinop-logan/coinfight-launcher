@@ -5,6 +5,23 @@ PLATFORM_LINUX = 0
 PLATFORM_WINDOWS = 1
 PLATFORM_MAC = 2
 
+class Version:
+    def __init__(self, versionNumList):
+        self.versionNumList = versionNumList
+    
+    def toString(self):
+        return ".".join(map(str, self.versionNumList))
+    
+    def toGitTag(self):
+        return "v" + self.toString()
+
+def fetchVersionInfo():
+    response = requests.get("https://coinfight.io/latest_version_info.json")
+    response.raise_for_status()
+    versionInfo = response.json()
+    versionInfo['version'] = Version(versionInfo['version'])
+    return versionInfo
+
 def getFolderName(platform):
     if platform == PLATFORM_LINUX:
         return "coinfight-linux"
@@ -18,8 +35,8 @@ def getFolderName(platform):
 def getZipFileName(platform):
     return getFolderName(platform) + ".zip"
 
-def getDownloadUrl(platform):
-    return "https://github.com/coinop-logan/coinfight/releases/download/v0.3.5.0/" + getZipFileName(platform)
+def getDownloadUrl(platform, version):
+    return "https://github.com/coinop-logan/coinfight/releases/download/" + version.toGitTag() + "/" + getZipFileName(platform)
 
 class Launcher(wx.Frame):
     def __init__(self, platform):
@@ -37,7 +54,7 @@ class Launcher(wx.Frame):
 
         sizer = wx.BoxSizer(wx.VERTICAL)
         sizer.AddStretchSpacer()
-        sizer.Add(self.statusText, 0, wx.ALIGN_CENTER_HORIZONTAL)
+        sizer.Add(self.statusText, 0, wx.ALIGN_LEFT)
         sizer.AddStretchSpacer()
         self.SetSizer(sizer)
 
@@ -52,18 +69,40 @@ class Launcher(wx.Frame):
             if event.IsShown():
                 # if the window is being shown, schedule our specific procedure
                 self.started = True
-                wx.CallAfter(self.startDownload)
+                wx.CallAfter(self.startDownloadProcess)
     
-    def startDownload(self):
+    def startDownloadProcess(self):
         self.dlResponse = None
+
+        self.statusText.SetLabel("Checking latest version")
+        try:
+            version = fetchVersionInfo()['version']
+        except requests.exceptions.ConnectionError as err:
+            self.statusText.SetLabel("Connection error. Are you connected to the Internet?")
+            return
+        
+        self.statusText.SetLabel("Starting download of " + version.toGitTag())
 
         if os.path.exists(getZipFileName(self.platform)):
             os.remove(getZipFileName(self.platform))
 
-        self.writingFile = open(getZipFileName(self.platform), 'wb')
-        response = requests.get(getDownloadUrl(self.platform), stream=True, allow_redirects=True)
+        try:
+            response = requests.get(getDownloadUrl(self.platform, version), stream=True, allow_redirects=True)
+            response.raise_for_status()
+        except requests.exceptions.HTTPError as err:
+            if response.status_code == 404:
+                self.statusText.SetLabel("Download file for " + version.toGitTag() + " not found...")
+            else:
+                self.statusText.SetLabel("http error " + str(response.status_code))
+
+            return
+        except requests.exceptions.ConnectionError as err:
+            self.statusText.SetLabel("Connection error. Are you connected to the Internet?")
+            return
+
         totalLength = response.headers.get('content-length')
 
+        self.writingFile = open(getZipFileName(self.platform), 'wb')
         if (totalLength is None):
             self.statusText.SetLabel("None total length; saving directly")
 
