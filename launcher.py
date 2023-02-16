@@ -1,12 +1,33 @@
-import wx, requests, os, stat
+import wx, requests, os, stat, sys
 from zipfile import ZipFile
+
+PLATFORM_LINUX = 0
+PLATFORM_WINDOWS = 1
+PLATFORM_MAC = 2
+
+def getFolderName(platform):
+    if platform == PLATFORM_LINUX:
+        return "coinfight-linux"
+    elif platform == PLATFORM_WINDOWS:
+        return "coinfight-windows"
+    elif platform == PLATFORM_MAC:
+        return "coinfight-mac"
+    else:
+        raise "Unrecognized platform"
+
+
+def getZipFileName(platform):
+    return getFolderName(platform) + ".zip"
+    
 
 url = "https://github.com/coinop-logan/coinfight/releases/download/v0.3.5.0/coinfight-linux.zip"
 
 class Launcher(wx.Frame):
-    def __init__(self, parent):
+    def __init__(self, platform):
         style=wx.DEFAULT_FRAME_STYLE
-        wx.Frame.__init__(self, parent, title="Coinfight Launcher", size=(600, 400), style=style)
+        wx.Frame.__init__(self, None, title="Coinfight Launcher", size=(600, 400), style=style)
+
+        self.platform = platform
 
         self.SetBackgroundColour(wx.Colour(0, 0, 0))
 
@@ -23,10 +44,24 @@ class Launcher(wx.Frame):
 
         self.Bind(wx.EVT_SHOW, self.OnShow)
 
+        self.started = False
+
     def OnShow(self, event):
+        # this method will be called every time the frame is shown
+        # including the first time
+        if (not self.started):
+            if event.IsShown():
+                # if the window is being shown, schedule our specific procedure
+                self.started = True
+                wx.CallAfter(self.startDownload)
+    
+    def startDownload(self):
         self.dlResponse = None
 
-        self.writingFile = open('coinfight-linux.zip', 'wb')
+        if os.path.exists(getZipFileName(self.platform)):
+            os.remove(getZipFileName(self.platform))
+
+        self.writingFile = open(getZipFileName(self.platform), 'wb')
         response = requests.get(url, stream=True, allow_redirects=True)
         totalLength = response.headers.get('content-length')
 
@@ -56,38 +91,41 @@ class Launcher(wx.Frame):
                 
                 wx.YieldIfNeeded()
             
-            with ZipFile("coinfight-linux.zip", 'r') as zObject:
-                zObject.extractall(path="./")
-            
-            st = os.stat('coinfight-linux/coinfight')
-            os.chmod('coinfight-linux/coinfight', st.st_mode | stat.S_IEXEC)
-            
+            with ZipFile(getZipFileName(self.platform), 'r') as zObject:
+                zObject.extractall()
+
             self.statusText.SetLabel("Unzipped")
 
-
-            # self.timerId = 1
-            # self.timer = wx.Timer(self, self.timerId)
-            # self.Bind(wx.EVT_TIMER, self.onTimer)
-            # self.timer.Start(100)
-    
-    # def onTimer(self, event):
-    #     if self.dlResponse is None or self.writingFile is None:
-    #         print("!?!?!")
-    #         return
-        
-    #     data = next(self.dataGenerator, None)
-        
-    #     if (data is None):
-    #         self.statusText.SetLabel("Download complete! outcome A.")
-    #         self.writingFile.close()
-    #         self.timer.Stop()
-        
-    #     else:
-        
-    #     print("iter ending")
+            if self.platform == PLATFORM_LINUX:
+                coinfightBinaryPath = os.path.join(getFolderName(self.platform), "coinfight")            
+                st = os.stat(coinfightBinaryPath)
+                os.chmod(coinfightBinaryPath, st.st_mode | stat.S_IEXEC)
+                
+                self.statusText.SetLabel("Unzipped and executable now")
+            
+            os.chdir(getFolderName(self.platform))
+            self.statusText.SetLabel("Running")
+            wx.YieldIfNeeded()
+            os.spawnv(os.P_WAIT, "coinfight", ["coinfight"])
+            self.statusText.SetLabel("All done!")
 
 
-app = wx.App()
-launcherFrame = Launcher(None)
-launcherFrame.Show(True)
-app.MainLoop()
+def main():
+    if sys.platform == "linux" or sys.platform == "linux2":
+        platform = PLATFORM_LINUX
+    elif sys.platform == "darwin":
+        platform = PLATFORM_MAC
+    elif sys.platform == "win32":
+        platform = PLATFORM_WINDOWS
+    else:
+        print("Unrecognized platform: " + platform)
+        return
+
+    app = wx.App()
+    launcherFrame = Launcher(platform)
+    launcherFrame.Show(True)
+    app.MainLoop()
+
+
+if __name__ == "__main__":
+    main()
