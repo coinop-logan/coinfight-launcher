@@ -47,7 +47,7 @@ def getLocalVersionOrNone(platform):
     return version
 
 def fetchVersionInfo():
-    response = requests.get("https://coinfight.io/latest_version_info.json")
+    response = requests.get("https://coinfight.io/version_info.json")
     response.raise_for_status()
     versionInfo = response.json()
     versionInfo['version'] = Version(versionInfo['version'])
@@ -175,10 +175,17 @@ class Launcher(wx.Frame):
             return
         
         try:
-            self.latestRemoteVersion = fetchVersionInfo()['version']
+            latestRemoteVersionInfo = fetchVersionInfo()
         except requests.exceptions.ConnectionError as err:
             self.statusText.SetLabel("Connection error. Are you connected to the Internet?")
             return
+        
+        if latestRemoteVersionInfo['updating']:
+            self.setButtonState(BUTTONSTATE_PLAY)
+            self.statusText.SetLabel("Note: Server is being updated and will not respond.")
+            return
+
+        self.latestRemoteVersion = latestRemoteVersionInfo['version']
         
         if localVersion is None:
             updateNeeded = True
