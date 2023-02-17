@@ -6,7 +6,7 @@ PLATFORM_WINDOWS = 1
 PLATFORM_MAC = 2
 
 class Version:
-    def __init__(self, versionNumList):
+    def __init__(self, versionNumList: list):
         self.versionNumList = versionNumList
     
     def toString(self):
@@ -14,6 +14,37 @@ class Version:
     
     def toGitTag(self):
         return "v" + self.toString()
+    
+    def __eq__(self, other):
+        if len(self.versionNumList) != len(other.versionNumList):
+            return False
+        
+        for i in range(len(self.versionNumList)):
+            if (self.versionNumList[i] != other.versionNumList[i]):
+                return False
+            
+        return True
+
+def versionFromString(versionString):
+    return Version(list(map(int, versionString.split('.'))))
+
+class CorruptVersionError(Exception):
+    pass
+
+def getLocalVersionOrNone(platform):
+    try:
+        f = open(os.path.join(getFolderName(platform), "version"), 'r')
+        versionStr = f.read()
+        f.close()
+    except FileNotFoundError:
+        return None
+    
+    try:
+        version = versionFromString(versionStr)
+    except ValueError:
+        raise CorruptVersionError
+
+    return version
 
 def fetchVersionInfo():
     response = requests.get("https://coinfight.io/latest_version_info.json")
@@ -105,8 +136,8 @@ class Launcher(wx.Frame):
                 self.started = True
                 self.progressBar.Hide()
                 self.setButtonState(BUTTONSTATE_WAITING)
-                self.statusText.SetLabel("Checking latest version")
-                wx.CallLater(100, self.startVersionFetch)
+                self.statusText.SetLabel("Checking for updates")
+                wx.CallLater(100, self.startVersionCheck)
     
     def setButtonState(self, state):
         if state == BUTTONSTATE_WAITING:
@@ -136,17 +167,30 @@ class Launcher(wx.Frame):
             self.button.SetLabel("ERROR")
             self.button.SetForegroundColour(wx.Colour(50, 50, 50))
     
-    def startVersionFetch(self):
-        self.statusText.SetLabel("Checking latest version")
+    def startVersionCheck(self):
         try:
-            version = fetchVersionInfo()['version']
+            localVersion = getLocalVersionOrNone(self.platform)
+        except CorruptVersionError:
+            self.statusText.SetLabel("Corrupt 'version' file")
+            return
+        
+        try:
+            self.latestRemoteVersion = fetchVersionInfo()['version']
         except requests.exceptions.ConnectionError as err:
             self.statusText.SetLabel("Connection error. Are you connected to the Internet?")
             return
         
-        self.latestRemoteVersion = version
-        self.statusText.SetLabel("Ready to download version " + version.toString())
-        self.setButtonState(BUTTONSTATE_UPDATE)
+        if localVersion is None:
+            updateNeeded = True
+        else:
+            updateNeeded = localVersion != self.latestRemoteVersion
+        
+        if updateNeeded:
+            self.statusText.SetLabel("Ready to download version " + self.latestRemoteVersion.toString())
+            self.setButtonState(BUTTONSTATE_UPDATE)
+        else:
+            self.statusText.SetLabel("")
+            self.setButtonState(BUTTONSTATE_PLAY)
     
     def updateClicked(self, event):
         self.setButtonState(BUTTONSTATE_UPDATING)
@@ -212,6 +256,10 @@ class Launcher(wx.Frame):
             
             os.remove(getZipFileName(self.platform))
 
+            # save the version info in the extracted folder
+            f = open(os.path.join(getFolderName(self.platform), "version"), 'w')
+            f.write(self.latestRemoteVersion.toString())
+            f.close()
 
             if self.platform == PLATFORM_LINUX or self.platform == PLATFORM_MAC:
                 self.statusText.SetLabel("Updating Permissions...")
@@ -237,7 +285,7 @@ class Launcher(wx.Frame):
         os.spawnv(os.P_WAIT, execName, [execName])
         # the above line blocks until the game closes
         os.chdir("..")
-        
+
         self.statusText.SetLabel("")
         self.setButtonState(BUTTONSTATE_PLAY)
 
