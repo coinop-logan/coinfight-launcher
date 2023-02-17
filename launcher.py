@@ -50,8 +50,10 @@ class Launcher(wx.Frame):
         style=wx.DEFAULT_FRAME_STYLE
         wx.Frame.__init__(self, None, title="Coinfight Launcher", size=(800, 400), style=style)
 
-        self.platform = platform
-
+        self.initLayout()
+        self.initState(platform)
+    
+    def initLayout(self):
         self.SetBackgroundColour(wx.Colour(0, 0, 50))
 
         self.mainSizer = wx.BoxSizer(wx.VERTICAL)
@@ -68,7 +70,7 @@ class Launcher(wx.Frame):
         buttonAndStatusSizer = wx.BoxSizer(wx.HORIZONTAL)
 
         buttonFont = wx.Font(20, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
-        self.button = wx.Button(self, label="test", size=(200, 70))
+        self.button = wx.Button(self, label="...", size=(200, 70))
         self.button.SetFont(buttonFont)
         buttonAndStatusSizer.Add(self.button, 0, wx.ALIGN_LEFT, 20)
 
@@ -88,8 +90,11 @@ class Launcher(wx.Frame):
         self.SetSizer(self.mainSizer)
 
         self.Bind(wx.EVT_SHOW, self.OnShow)
-
+    
+    def initState(self, platform):
+        self.platform = platform
         self.started = False
+        self.latestRemoteVersion = None
 
     def OnShow(self, event):
         # this method will be called every time the frame is shown
@@ -98,7 +103,10 @@ class Launcher(wx.Frame):
             if event.IsShown():
                 # if the window is being shown, schedule our specific procedure
                 self.started = True
-                wx.CallAfter(self.startDownloadProcess)
+                self.progressBar.Hide()
+                self.setButtonState(BUTTONSTATE_WAITING)
+                self.statusText.SetLabel("Checking latest version")
+                wx.CallLater(100, self.startVersionFetch)
     
     def setButtonState(self, state):
         if state == BUTTONSTATE_WAITING:
@@ -109,7 +117,7 @@ class Launcher(wx.Frame):
             self.button.SetBackgroundColour(wx.Colour(50, 50, 255))
             self.button.SetLabel("UPDATE")
             self.button.SetForegroundColour(wx.Colour(255, 255, 255))
-            self.button.Bind(wx.EVT_BUTTON, self.wut)
+            self.button.Bind(wx.EVT_BUTTON, self.updateClicked)
         elif state == BUTTONSTATE_UPDATING:
             self.button.SetBackgroundColour(wx.Colour(200, 200, 255))
             self.button.SetLabel("UPDATING")
@@ -118,7 +126,7 @@ class Launcher(wx.Frame):
             self.button.SetBackgroundColour(wx.Colour(0, 255, 0))
             self.button.SetLabel("PLAY")
             self.button.SetForegroundColour(wx.Colour(0, 0, 0))
-            self.button.Bind(wx.EVT_BUTTON, self.wut)
+            self.button.Bind(wx.EVT_BUTTON, self.startGameClicked)
         elif state == BUTTONSTATE_PLAYING:
             self.button.SetBackgroundColour(wx.Colour(200, 255, 200))
             self.button.SetLabel("PLAYING")
@@ -128,13 +136,7 @@ class Launcher(wx.Frame):
             self.button.SetLabel("ERROR")
             self.button.SetForegroundColour(wx.Colour(50, 50, 50))
     
-    def startDownloadProcess(self):
-        self.setButtonState(BUTTONSTATE_ERROR)
-        return
-        self.progressBar.Hide()
-        
-        self.dlResponse = None
-
+    def startVersionFetch(self):
         self.statusText.SetLabel("Checking latest version")
         try:
             version = fetchVersionInfo()['version']
@@ -142,40 +144,51 @@ class Launcher(wx.Frame):
             self.statusText.SetLabel("Connection error. Are you connected to the Internet?")
             return
         
-        self.statusText.SetLabel("Starting download of " + version.toGitTag())
-
+        self.latestRemoteVersion = version
+        self.statusText.SetLabel("Ready to download version " + version.toString())
+        self.setButtonState(BUTTONSTATE_UPDATE)
+    
+    def updateClicked(self, event):
+        self.setButtonState(BUTTONSTATE_UPDATING)
+        self.dlResponse = None
+        self.statusText.SetLabel("Downloading " + self.latestRemoteVersion.toGitTag())
+        wx.CallLater(100, self.startUpdate)
+    
+    def startUpdate(self):
         if os.path.exists(getZipFileName(self.platform)):
             os.remove(getZipFileName(self.platform))
 
         try:
-            response = requests.get(getDownloadUrl(self.platform, version), stream=True, allow_redirects=True)
+            response = requests.get(getDownloadUrl(self.platform, self.latestRemoteVersion), stream=True, allow_redirects=True)
             response.raise_for_status()
         except requests.exceptions.HTTPError as err:
             if response.status_code == 404:
-                self.statusText.SetLabel("Download file for " + version.toGitTag() + " not found...")
+                self.statusText.SetLabel("Download file for " + self.latestRemoteVersion.toGitTag() + " not found...")
             else:
                 self.statusText.SetLabel("http error " + str(response.status_code))
 
+            self.setButtonState(BUTTONSTATE_ERROR)
             return
         except requests.exceptions.ConnectionError as err:
             self.statusText.SetLabel("Connection error. Are you connected to the Internet?")
+            self.setButtonState(BUTTONSTATE_ERROR)
             return
 
         totalLength = response.headers.get('content-length')
 
         self.writingFile = open(getZipFileName(self.platform), 'wb')
         if (totalLength is None):
-            self.statusText.SetLabel("None total length; saving directly")
-
             self.writingFile.write(response.content)
             self.writingFile.close()
+
+            self.setButtonState(BUTTONSTATE_PLAY)
+            self.statusText.SetLabel("Download was surprisingly small... There may be something wrong :/")
             return
 
         else:
-
             self.dlResponse = response
             self.dataGenerator = response.iter_content(chunk_size=5000)
-            self.statusText.SetLabel("downloading...")
+            self.statusText.SetLabel("Downloading...")
             self.totalDlLength = int(totalLength)
             self.downloadedSoFar = 0
 
@@ -188,35 +201,45 @@ class Launcher(wx.Frame):
                 self.progressBar.SetValue(self.downloadedSoFar)
                 
                 if (self.downloadedSoFar == self.totalDlLength):
-                    self.statusText.SetLabel("Download complete! Unzipping.")
                     self.writingFile.close()
                     break
                 
                 wx.YieldIfNeeded()
             
+            self.statusText.SetLabel("Extracting...")
             with ZipFile(getZipFileName(self.platform), 'r') as zObject:
                 zObject.extractall()
             
             os.remove(getZipFileName(self.platform))
 
-            self.statusText.SetLabel("Unzipped")
 
             if self.platform == PLATFORM_LINUX or self.platform == PLATFORM_MAC:
+                self.statusText.SetLabel("Updating Permissions...")
                 coinfightBinaryPath = os.path.join(getFolderName(self.platform), "coinfight")            
                 st = os.stat(coinfightBinaryPath)
                 os.chmod(coinfightBinaryPath, st.st_mode | stat.S_IEXEC)
                 
-                self.statusText.SetLabel("Unzipped and executable now")
-            
-            os.chdir(getFolderName(self.platform))
-            self.statusText.SetLabel("Running")
-            wx.YieldIfNeeded()
-            if self.platform == PLATFORM_WINDOWS:
-                execName = "coinfight.exe"
-            else:
-                execName = "coinfight"
-            os.spawnv(os.P_WAIT, execName, [execName])
-            self.statusText.SetLabel("All done!")
+        self.statusText.SetLabel("Ready to play!")
+        self.setButtonState(BUTTONSTATE_PLAY)
+
+    def startGameClicked(self, event):
+        self.statusText.SetLabel("Running")
+        self.setButtonState(BUTTONSTATE_PLAYING)
+        wx.CallLater(100, self.startGame)
+
+    def startGame(self):
+        os.chdir(getFolderName(self.platform))
+        wx.YieldIfNeeded()
+        if self.platform == PLATFORM_WINDOWS:
+            execName = "coinfight.exe"
+        else:
+            execName = "coinfight"
+        os.spawnv(os.P_WAIT, execName, [execName])
+        # the above line blocks until the game closes
+        os.chdir("..")
+        
+        self.statusText.SetLabel("")
+        self.setButtonState(BUTTONSTATE_PLAY)
 
 
 def main():
