@@ -38,6 +38,13 @@ def getZipFileName(platform):
 def getDownloadUrl(platform, version):
     return "https://github.com/coinop-logan/coinfight/releases/download/" + version.toGitTag() + "/" + getZipFileName(platform)
 
+BUTTONSTATE_WAITING = 0
+BUTTONSTATE_UPDATE = 1
+BUTTONSTATE_UPDATING = 2
+BUTTONSTATE_PLAY = 3
+BUTTONSTATE_PLAYING = 4
+BUTTONSTATE_ERROR = 5
+
 class Launcher(wx.Frame):
     def __init__(self, platform):
         style=wx.DEFAULT_FRAME_STYLE
@@ -63,7 +70,6 @@ class Launcher(wx.Frame):
         buttonFont = wx.Font(20, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
         self.button = wx.Button(self, label="test", size=(200, 70))
         self.button.SetFont(buttonFont)
-        self.button.Bind(wx.EVT_BUTTON, self.buttonClicked)
         buttonAndStatusSizer.Add(self.button, 0, wx.ALIGN_LEFT, 20)
 
         self.statusText = wx.StaticText(self, label="")
@@ -85,9 +91,6 @@ class Launcher(wx.Frame):
 
         self.started = False
 
-    def buttonClicked(self, event):
-        self.progressBar.Show()
-
     def OnShow(self, event):
         # this method will be called every time the frame is shown
         # including the first time
@@ -97,7 +100,37 @@ class Launcher(wx.Frame):
                 self.started = True
                 wx.CallAfter(self.startDownloadProcess)
     
+    def setButtonState(self, state):
+        if state == BUTTONSTATE_WAITING:
+            self.button.SetBackgroundColour(wx.Colour(200, 200, 200))
+            self.button.SetLabel("...")
+            self.button.SetForegroundColour(wx.Colour(50, 50, 50))
+        elif state == BUTTONSTATE_UPDATE:
+            self.button.SetBackgroundColour(wx.Colour(50, 50, 255))
+            self.button.SetLabel("UPDATE")
+            self.button.SetForegroundColour(wx.Colour(255, 255, 255))
+            self.button.Bind(wx.EVT_BUTTON, self.wut)
+        elif state == BUTTONSTATE_UPDATING:
+            self.button.SetBackgroundColour(wx.Colour(200, 200, 255))
+            self.button.SetLabel("UPDATING")
+            self.button.SetForegroundColour(wx.Colour(50, 50, 50))
+        elif state == BUTTONSTATE_PLAY:
+            self.button.SetBackgroundColour(wx.Colour(0, 255, 0))
+            self.button.SetLabel("PLAY")
+            self.button.SetForegroundColour(wx.Colour(0, 0, 0))
+            self.button.Bind(wx.EVT_BUTTON, self.wut)
+        elif state == BUTTONSTATE_PLAYING:
+            self.button.SetBackgroundColour(wx.Colour(200, 255, 200))
+            self.button.SetLabel("PLAYING")
+            self.button.SetForegroundColour(wx.Colour(50, 50, 50))
+        elif state == BUTTONSTATE_ERROR:
+            self.button.SetBackgroundColour(wx.Colour(255, 100, 100))
+            self.button.SetLabel("ERROR")
+            self.button.SetForegroundColour(wx.Colour(50, 50, 50))
+    
     def startDownloadProcess(self):
+        self.setButtonState(BUTTONSTATE_ERROR)
+        return
         self.progressBar.Hide()
         
         self.dlResponse = None
