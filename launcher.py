@@ -180,12 +180,8 @@ class Launcher(wx.Frame):
             self.statusText.SetLabel("Connection error. Are you connected to the Internet?")
             return
         
-        if latestRemoteVersionInfo['updating']:
-            self.setButtonState(BUTTONSTATE_PLAY)
-            self.statusText.SetLabel("Note: Server is being updated and will not respond.")
-            return
-
         self.latestRemoteVersion = latestRemoteVersionInfo['version']
+        self.serverIsUpdating = latestRemoteVersionInfo['updating']
         
         if localVersion is None:
             updateNeeded = True
@@ -196,8 +192,12 @@ class Launcher(wx.Frame):
             self.statusText.SetLabel("Ready to download version " + self.latestRemoteVersion.toString())
             self.setButtonState(BUTTONSTATE_UPDATE)
         else:
-            self.statusText.SetLabel("")
             self.setButtonState(BUTTONSTATE_PLAY)
+
+            if self.serverIsUpdating:
+                self.statusText.SetLabel("Note: Server is being updated and will not respond.")
+            else:
+                self.statusText.SetLabel("")
     
     def updateClicked(self, event):
         self.setButtonState(BUTTONSTATE_UPDATING)
@@ -274,8 +274,11 @@ class Launcher(wx.Frame):
                 st = os.stat(coinfightBinaryPath)
                 os.chmod(coinfightBinaryPath, st.st_mode | stat.S_IEXEC)
                 
-        self.statusText.SetLabel("Ready to play!")
         self.setButtonState(BUTTONSTATE_PLAY)
+        if self.serverIsUpdating:
+            self.statusText.SetLabel("Ready to play! (but server is updating)")
+        else:
+            self.statusText.SetLabel("Ready to play!")
 
     def startGameClicked(self, event):
         self.statusText.SetLabel("Running")
