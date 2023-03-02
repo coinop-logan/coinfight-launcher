@@ -33,7 +33,7 @@ class CorruptVersionError(Exception):
 
 def getLocalVersionOrNone(platform):
     try:
-        f = open(os.path.join(getFolderName(platform), "version"), 'r')
+        f = open(os.path.join(getDataFolder(platform), "version"), 'r')
         versionStr = f.read()
         f.close()
     except FileNotFoundError:
@@ -53,7 +53,19 @@ def fetchVersionInfo():
     versionInfo['version'] = Version(versionInfo['version'])
     return versionInfo
 
-def getFolderName(platform):
+def getDataFolder(platform):
+    if platform == PLATFORM_LINUX:
+        return "/usr/share/coinfight/"
+    else:
+        return "."
+
+def getGameFolderPath(platform):
+    if platform == PLATFORM_LINUX:
+        return "/usr/lib/coinfight/" + getCoinfightFolderName(platform)
+    else:
+        return getCoinfightFolderName(platform)
+
+def getCoinfightFolderName(platform):
     if platform == PLATFORM_LINUX:
         return "coinfight-linux"
     elif platform == PLATFORM_WINDOWS:
@@ -64,10 +76,27 @@ def getFolderName(platform):
         raise "Unrecognized platform"
 
 def getZipFileName(platform):
-    return getFolderName(platform) + ".zip"
+    return getCoinfightFolderName(platform) + ".zip"
+
+def getZipFilePath(platform):
+    return getDataFolder(platform) + getZipFileName(platform)
 
 def getDownloadUrl(platform, version):
     return "https://github.com/coinop-logan/coinfight/releases/download/" + version.toGitTag() + "/" + getZipFileName(platform)
+
+# def getDownloadFolderPath(platform):
+#     if platform == PLATFORM_LINUX:
+#         return "/usr/lib/coinfight/"
+#     else:
+#         return ""
+
+
+# def getZipFileName(platform):
+#     return getFolderName(platform) + ".zip"
+
+# def getZipFilePath(platform):
+#     return getDownloadFolderPath(platform) + getZipFileName(platform)
+
 
 BUTTONSTATE_WAITING = 0
 BUTTONSTATE_UPDATE = 1
@@ -206,8 +235,8 @@ class Launcher(wx.Frame):
         wx.CallLater(100, self.startUpdate)
     
     def startUpdate(self):
-        if os.path.exists(getZipFileName(self.platform)):
-            os.remove(getZipFileName(self.platform))
+        if os.path.exists(getZipFilePath(self.platform)):
+            os.remove(getZipFilePath(self.platform))
 
         try:
             response = requests.get(getDownloadUrl(self.platform, self.latestRemoteVersion), stream=True, allow_redirects=True)
@@ -227,7 +256,7 @@ class Launcher(wx.Frame):
 
         totalLength = response.headers.get('content-length')
 
-        self.writingFile = open(getZipFileName(self.platform), 'wb')
+        self.writingFile = open(getZipFilePath(self.platform), 'wb')
         if (totalLength is None):
             self.writingFile.write(response.content)
             self.writingFile.close()
@@ -258,21 +287,25 @@ class Launcher(wx.Frame):
                 wx.YieldIfNeeded()
             
             self.statusText.SetLabel("Extracting...")
-            with ZipFile(getZipFileName(self.platform), 'r') as zObject:
-                zObject.extractall()
+            with ZipFile(getZipFilePath(self.platform), 'r') as zObject:
+                zObject.extractall(getDataFolder(self.platform))
             
-            os.remove(getZipFileName(self.platform))
+            os.remove(getZipFilePath(self.platform))
 
-            # save the version info in the extracted folder
-            f = open(os.path.join(getFolderName(self.platform), "version"), 'w')
+            # save the version info
+            f = open(os.path.join(getDataFolder(self.platform), "version"), 'w')
             f.write(self.latestRemoteVersion.toString())
             f.close()
 
             if self.platform == PLATFORM_LINUX or self.platform == PLATFORM_MAC:
                 self.statusText.SetLabel("Updating Permissions...")
-                coinfightBinaryPath = os.path.join(getFolderName(self.platform), "coinfight")            
+                coinfightFolderPath = os.path.join(getDataFolder(self.platform), getCoinfightFolderName(self.platform))
+                coinfightBinaryPath = os.path.join(coinfightFolderPath, "coinfight")            
                 st = os.stat(coinfightBinaryPath)
                 os.chmod(coinfightBinaryPath, st.st_mode | stat.S_IEXEC)
+            
+                if self.platform == PLATFORM_LINUX:
+                    os.rename(coinfightFolderPath, os.path.join(getGameFolderPath(self.platform)))
                 
         self.setButtonState(BUTTONSTATE_PLAY)
         if self.serverIsUpdating:
@@ -286,7 +319,7 @@ class Launcher(wx.Frame):
         wx.CallLater(100, self.startGame)
 
     def startGame(self):
-        os.chdir(getFolderName(self.platform))
+        os.chdir(getGameFolderPath(self.platform))
         wx.YieldIfNeeded()
         if self.platform == PLATFORM_WINDOWS:
             execName = "coinfight.exe"
