@@ -1,4 +1,4 @@
-import wx, requests, os, stat, sys
+import wx, requests, os, stat, sys, shutil
 from zipfile import ZipFile
 
 PLATFORM_LINUX = 0
@@ -305,6 +305,7 @@ class Launcher(wx.Frame):
                 os.chmod(coinfightBinaryPath, st.st_mode | stat.S_IEXEC)
             
                 if self.platform == PLATFORM_LINUX:
+                    shutil.rmtree(getGameFolderPath(self.platform))
                     os.rename(coinfightFolderPath, os.path.join(getGameFolderPath(self.platform)))
                 
         self.setButtonState(BUTTONSTATE_PLAY)
